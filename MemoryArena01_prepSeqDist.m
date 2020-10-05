@@ -6,21 +6,17 @@
 clear
 close all
 
-home = 1;
-dataset = 50; % 1 == memarena training threshold 70 | 50 == memarena training threshold 50
+dataset = 50; % 70 == memarena training threshold 70 | 50 == memarena training threshold 50
 
-if home 
-    addpath(genpath('/Users/user/Documents/GitHub/MemoryArena_behav'))
-else
-    addpath(genpath('C:\Users\Petzkam\GitHub\MemoryArena_behav'))
-end
+addpath(genpath('/Users/user/Documents/GitHub/MemoryArena_behav')) % add basedir
+datadir = '/Volumes/MEMTOSH/MemoryArena_behav_data';
 
 %%
-[paths, subj] = getting_paths(home, dataset); 
+[paths, subj] = getting_paths(datadir, dataset); 
 
 %% independent & dependent variables
 condlabel = {'sleep' 'sleep_int' 'wake' 'wake_int'};
-dvlabel = {'dist_' 'seq_' 'perf_'};
+dvlabel = {'perf_' 'seq_' 'dist_' 'dur_'};
 %%
 for isub = 1:numel(subj) 
     
@@ -96,6 +92,62 @@ for isub = 1:numel(subj)
             dist_.trainpldist{isub,itrain}(iob) = pdist(X,'euclidean'); 
         end
         
+        %% overlap between correct placement and subjective placement
+        
+        % get the size of the square in which the arena was drawn
+        sqaureAxisWidth = 2*(traindat.output.arenaRadius + traindat.options.npixels*0.1 + traindat.options.npixels);
+        
+        for iob = 1:size(ObLoc,1)
+            
+            % create a mask to verify proportion of overlap
+            [rowsInImage,~] = meshgrid(1:sqaureAxisWidth,1:sqaureAxisWidth);
+            allPixels = zeros(size(rowsInImage));
+            
+            correctX = ObLoc(iob,1);
+            correctY = ObLoc(iob,2);
+            
+            correctMaskX = floor((correctX-traindat.options.npixels/2:correctX+traindat.options.npixels/2-1)');
+            correctMaskY = floor((correctY-traindat.options.npixels/2:correctY+traindat.options.npixels/2-1)');
+            correctArea = allPixels;
+            correctArea(correctMaskY,correctMaskX) = 1;
+            
+            if ~isnan(SubLoc(iob,1))
+                dropX = SubLoc(iob,1);
+                dropY = SubLoc(iob,2);
+                
+                dropMaskX = floor((dropX-traindat.options.npixels/2:dropX+traindat.options.npixels/2-1)');
+                dropMaskY = floor((dropY-traindat.options.npixels/2:dropY+traindat.options.npixels/2-1)');
+                
+                droppedArea = allPixels;
+                droppedArea(dropMaskY,dropMaskX) = 1;
+                
+                dist_.trainoverlap{isub,itrain}(iob) = (length(find(correctArea.*droppedArea))/sum(correctArea(:)))*100; % percentage of overlap
+            else
+                dist_.trainoverlap{isub,itrain}(iob) = nan; % percentage of overlap
+            end
+            
+        end
+        
+        %%
+        dur_.train(isub, itrain) = traindat.output.runDuration;
+        
+    end
+    
+    dur_.ntrainrounds(isub, 1) = numel(trainfiles);
+    
+    %% ------------------------------------- ENCODING -------------------------------
+    encfiles = dir('*_init*'); % both, enc 1 and enc interference
+    
+    if numel(encfiles) > 1 % resort to enc1, encInt
+        encfiles([1,2]) = encfiles([2,1]);
+    end
+    
+    for ienc = 1:numel(encfiles) 
+        encdat = [];
+        encdat = load(fullfile(pwd,encfiles(ienc).name));
+        
+        dur_.enc(isub, ienc) = ...
+            encdat.output.objectClickedTime(1,numel(SubOrd)) - encdat.output.StartRunTime;
     end
     
     %% -------------------------------------- RETRIEVAL --------------------------------------------
@@ -142,6 +194,47 @@ for isub = 1:numel(subj)
             X = [SubLoc(iob,:); ObLoc(iob,:)];
             dist_.pldist{isub,iret}(iob) = pdist(X,'euclidean'); 
         end
+        
+        
+        %% overlap between correct placement and subjective placement
+        
+        % get the size of the square in which the arena was drawn
+        sqaureAxisWidth = 2*(retdat.output.arenaRadius + retdat.options.npixels*0.1 + retdat.options.npixels);
+        
+        for iob = 1:size(ObLoc,1)
+            
+            % create a mask to verify proportion of overlap
+            [rowsInImage,~] = meshgrid(1:sqaureAxisWidth,1:sqaureAxisWidth);
+            allPixels = zeros(size(rowsInImage));
+            
+            correctX = ObLoc(iob,1);
+            correctY = ObLoc(iob,2);
+            
+            correctMaskX = floor((correctX-retdat.options.npixels/2:correctX+retdat.options.npixels/2-1)');
+            correctMaskY = floor((correctY-retdat.options.npixels/2:correctY+retdat.options.npixels/2-1)');
+            correctArea = allPixels;
+            correctArea(correctMaskY,correctMaskX) = 1;
+            
+            if ~isnan(SubLoc(iob,1))
+                dropX = SubLoc(iob,1);
+                dropY = SubLoc(iob,2);
+                
+                dropMaskX = floor((dropX-retdat.options.npixels/2:dropX+retdat.options.npixels/2-1)');
+                dropMaskY = floor((dropY-retdat.options.npixels/2:dropY+retdat.options.npixels/2-1)');
+                
+                droppedArea = allPixels;
+                droppedArea(dropMaskY,dropMaskX) = 1;
+                
+                dist_.retoverlap{isub,iret}(iob) = (length(find(correctArea.*droppedArea))/sum(correctArea(:)))*100; % percentage of overlap
+            else
+                dist_.retoverlap{isub,iret}(iob) = nan; % percentage of overlap
+            end
+            
+        end
+        
+        
+        %% duration
+        dur_.test(isub,iret) = retdat.output.ObjectDroppedTime(1,numel(SubOrd)) - retdat.output.StartTime;
 
     end
      
@@ -157,11 +250,11 @@ for idv = 1:numel(dvlabel)
 end
 
 %% save
-cd(paths.maindir)
+cd(datadir)
 
 if ~isfolder(['results', num2str(dataset)])
     mkdir(['results', num2str(dataset)])
 end
 
 cd(['results', num2str(dataset)])
-save('memArena_dvs', 'seq_', 'perf_', 'dist_')
+save('memArena_dvs', 'perf_', 'seq_', 'dist_', 'dur_')

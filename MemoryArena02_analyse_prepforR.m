@@ -5,21 +5,16 @@
 clear
 close all
 
-home = 1;
-dataset = 50; % 1 == memarena V1 (int70) | 50 == memarena V2 (int50)
+dataset = 70; % 70 == memarena V1 (int70) | 50 == memarena V2 (int50)
 
-if home 
-    addpath(genpath('/Users/user/Documents/GitHub/MemoryArena_behav'))
-else
-    addpath(genpath('C:\Users\Petzkam\GitHub\MemoryArena_behav'))
-end
-
+addpath(genpath('/Users/user/Documents/GitHub/MemoryArena_behav'))
+datadir = '/Volumes/MEMTOSH/MemoryArena_behav_data';
 %%
 
-[paths subj] = getting_paths(home, dataset);
+[paths, subj] = getting_paths(datadir, dataset);
 
 %%
-cd(paths.dat)
+cd(paths.results)
 load('memArena_dvs')
 
 %% getting averages across participants for sequence and placement distance
@@ -41,9 +36,20 @@ for isub = 1:numel(subj)
         if iret == 1
            pldist(isub,:) = dist_.pldist{isub,iret}; % contains single objects
         end
+        
+        %% overlap & sequence (position)
+        dvs.seqcorr_ret(isub,iret) = sum(seq_.ret{isub}(iret,:) - [1:20] == 0);
+        dvs.pldistcorr_ret(isub,iret) = sum(dist_.retoverlap{isub, iret} >= 25); % 25 percent so that overlap was scored as correct
 
     end
- 
+    
+    %% duration of enc+train & ntrianingrounds
+    
+    dvs.ntrain(isub) = dur_.ntrainrounds(isub);
+    dvs.dur_enc(isub) = dur_.enc(isub,1);
+    dvs.dur_train(isub) = sum(dur_.train(isub,:));
+    
+
 end
 
 
@@ -51,12 +57,17 @@ end
 
 % reshape variables into long format
 dvs.perf = perf_.ret(:,1:2)*100;
-varOI = {'perf' 'seq_' 'pldist'};
+varOI = {'perf' 'seq_' 'pldist' 'dur_enc' 'dur_train' 'ntrain'};
 
 memdat = [];
 for i = 1:numel(varOI)
     
-    memdat(:,i) = reshape(dvs.(varOI{i}),[],1);
+    if ismember(i,[1:3]) % 1-3 --> variable with ret 1 and 2 performance
+        memdat(:,i) = reshape(dvs.(varOI{i}),[],1); 
+    else % ret 2 doesnt exist -- var has to save twice to fit in the long format
+        var_tmp = reshape(dvs.(varOI{i}),[],1);
+        memdat(:,i) = [var_tmp; var_tmp];
+    end
     
 end
 
@@ -75,7 +86,7 @@ int_(int_ == 2 | int_ == 4) = 1;
 memdat = [memdat cond_ del_ int_ time];
 
 %% save
-cd(paths.dat)
+cd(paths.results)
 if ~isfolder('prepR')
     mkdir 'prepR'
 end
