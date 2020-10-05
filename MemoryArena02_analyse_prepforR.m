@@ -37,10 +37,6 @@ for isub = 1:numel(subj)
            pldist(isub,:) = dist_.pldist{isub,iret}; % contains single objects
         end
         
-        %% overlap & sequence (position)
-        dvs.seqcorr_ret(isub,iret) = sum(seq_.ret{isub}(iret,:) - [1:20] == 0);
-        dvs.pldistcorr_ret(isub,iret) = sum(dist_.retoverlap{isub, iret} >= 25); % 25 percent so that overlap was scored as correct
-
     end
     
     %% duration of enc+train & ntrianingrounds
